@@ -6,6 +6,7 @@ const { User, Goal, Project, Area } = require('../../models');
 const { computeTaskMetrics } = require('../tasks/queries/metrics-computation');
 
 const PRIORITY_LABELS = { 0: 'low', 1: 'medium', 2: 'high' };
+const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 const STATUS_LABELS = {
     0: 'not started',
     1: 'in progress',
@@ -21,7 +22,15 @@ function getOpenAIClient() {
     if (!apiKey) {
         throw new Error('OPENAI_API_KEY environment variable is not set');
     }
-    return new OpenAI({ apiKey });
+    const baseURL = process.env.OPENAI_BASE_URL;
+    return new OpenAI({
+        apiKey,
+        ...(baseURL ? { baseURL } : {}),
+    });
+}
+
+function getOpenAIModel() {
+    return process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
 }
 
 async function fetchUserContext(userId) {
@@ -237,7 +246,7 @@ Rules:
 - Return only the JSON object, no other text`;
 
     const response = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: getOpenAIModel(),
         messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: contextSummary },
@@ -436,7 +445,7 @@ Rules:
 - Return only the JSON object, no other text`;
 
     const response = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: getOpenAIModel(),
         messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: lines.join('\n') },
@@ -565,7 +574,7 @@ Rules:
 - Return only the JSON object, no other text`;
 
     const response = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: getOpenAIModel(),
         messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: lines.join('\n') },

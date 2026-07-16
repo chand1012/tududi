@@ -12,20 +12,22 @@ The AI Assistant adds three context-aware intelligence features to Tududi:
 2. **Task Insights** — domain-level analysis, next steps, and useful links for a specific task
 3. **Project Insights** — health assessment, next action, and risk flags for a specific project
 
-All three features call the OpenAI API (`gpt-4o-mini`) and cache results in the database. Results persist until the user explicitly regenerates them.
+All three features call an OpenAI-compatible API and cache results in the database. Results persist until the user explicitly regenerates them.
 
 ---
 
 ## Setup
 
-Set the `OPENAI_API_KEY` environment variable before starting the server:
+Set `OPENAI_API_KEY` before starting the server. You can optionally select a different OpenAI-compatible endpoint and model:
 
 ```bash
 # .env or Docker environment
 OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
 ```
 
-Without this key, all AI Assistant endpoints return HTTP 500.
+`OPENAI_BASE_URL` defaults to the official OpenAI endpoint, and `OPENAI_MODEL` defaults to `gpt-4o-mini`. For another provider, use the provider's OpenAI-compatible `/v1` URL, model name, and required API key. Without a key, all AI Assistant endpoints return HTTP 500.
 
 ---
 
@@ -149,13 +151,13 @@ All endpoints require an authenticated session. Unauthenticated requests return 
 
 ## Model and Provider
 
-| Setting | Value |
-|---------|-------|
-| Provider | OpenAI |
-| Model | `gpt-4o-mini` |
-| Environment variable | `OPENAI_API_KEY` |
+| Setting | Environment variable | Default |
+|---------|----------------------|---------|
+| API key | `OPENAI_API_KEY` | Required |
+| Base URL | `OPENAI_BASE_URL` | OpenAI API endpoint |
+| Model | `OPENAI_MODEL` | `gpt-4o-mini` |
 
-The client is initialized in `service.js:getOpenAIClient()`. Switching models or providers requires updating that function and the three `chat.completions.create` calls in the same file.
+The client is initialized in `service.js:getOpenAIClient()`. All three completion calls read the configured model at request time.
 
 ---
 

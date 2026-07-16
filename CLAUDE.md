@@ -186,7 +186,7 @@ npm start  # Frontend on :8080, Backend on :3002
 
 22. **[AI Assistant](docs/13-ai-assistant.md)**
     - Daily Brief, Task Insights, and Project Insights features
-    - OpenAI integration (gpt-4o-mini, OPENAI_API_KEY)
+    - OpenAI-compatible integration (configurable base URL and model)
     - Caching strategy and API endpoints
     - Adding new AI features
 

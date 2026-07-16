@@ -133,6 +133,11 @@ GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-google-oauth-secret
 GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
 
+# Optional - AI Assistant (any OpenAI-compatible API)
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+
 # Optional - Features
 DISABLE_SCHEDULER=false
 SWAGGER_ENABLED=true
