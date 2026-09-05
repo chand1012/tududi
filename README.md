@@ -58,9 +58,10 @@ For the thinking behind tududi, read:
 - **Installable PWA**: Add tududi to your home screen on Android, iOS, and desktop browsers for a native app-like experience. The app stays readable from cache when offline, and write operations are queued and synced automatically when connectivity returns.
 - **Multi-Language Support**: Available in 24 languages with full localization support for a truly global productivity experience.
 - **Telegram Integration**:
-    - Create tasks directly through Telegram messages
+    - Create tasks directly through Telegram text or transcribed voice messages
     - Receive daily digests of your tasks
     - Quick capture of ideas and todos on the go
+- **Voice Capture**: Record from the Inbox, review the transcript, and save it through the existing quick-capture workflow.
 - **Open API & Access Tokens**: Versioned Swagger docs exposed at `/api/v1` plus personal API keys for integrating tududi with your own tooling or automations.
 - **OIDC/SSO Authentication**: Enterprise-ready Single Sign-On support with:
     - Multiple OIDC providers (Google, Okta, Keycloak, Authentik, PocketID, Azure AD, and more)

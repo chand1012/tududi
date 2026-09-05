@@ -16,16 +16,16 @@ import { createInboxItemWithStore } from '../../utils/inboxService';
 import { isAuthError, OfflineQueuedError } from '../../utils/authUtils';
 import { createTag } from '../../utils/tagsService';
 import { createProject } from '../../utils/projectsService';
-import {
-    LinkIcon,
-    XMarkIcon,
-} from '@heroicons/react/24/outline';
+import { LinkIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useStore } from '../../store/useStore';
 import { isUrl, extractUrlTitle } from '../../utils/urlService';
 import { getApiPath } from '../../config/paths';
 import { getCsrfToken } from '../../utils/csrfService';
 import InboxSelectedChips from './InboxSelectedChips';
 import SuggestionsDropdown from './SuggestionsDropdown';
+import VoiceCaptureButton, {
+    type VoiceTranscriptMode,
+} from './VoiceCaptureButton';
 export interface QuickCaptureInputHandle {
     submit: (forceInbox?: boolean) => Promise<void>;
 }
@@ -128,6 +128,7 @@ const QuickCaptureInput = React.forwardRef<
         const { t } = useTranslation();
         const [inputText, setInputText] = useState<string>(initialValue);
         const [isSaving, setIsSaving] = useState(false);
+        const [isVoiceBusy, setIsVoiceBusy] = useState(false);
         const { showSuccessToast, showErrorToast } = useToast();
         const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
         const { tagsStore } = useStore();
@@ -899,10 +900,8 @@ const QuickCaptureInput = React.forwardRef<
 
             if (hashtagMatch) {
                 const newText =
-                    beforeCursor.replace(
-                        /#([a-zA-Z0-9_]*)$/,
-                        `#${tagName} `
-                    ) + afterCursor;
+                    beforeCursor.replace(/#([a-zA-Z0-9_]*)$/, `#${tagName} `) +
+                    afterCursor;
                 setInputText(newText);
                 setShowTagSuggestions(false);
                 setFilteredTags([]);
@@ -1020,10 +1019,65 @@ const QuickCaptureInput = React.forwardRef<
             }
         };
 
+        const saveInboxText = useCallback(
+            async (text: string, clearAfterSave: boolean): Promise<boolean> => {
+                try {
+                    await createMissingTags(text);
+                    await createMissingProjects(text);
+                    await createInboxItemWithStore(text);
+                    showSuccessToast(t('inbox.itemAdded'));
+                    if (clearAfterSave) clearComposerText();
+                    return true;
+                } catch (error) {
+                    if (error instanceof OfflineQueuedError) {
+                        showSuccessToast(
+                            t(
+                                'inbox.itemQueuedOffline',
+                                "Saved offline. It'll sync automatically once you're back online."
+                            )
+                        );
+                        if (clearAfterSave) clearComposerText();
+                        return true;
+                    }
+                    if (isAuthError(error)) return false;
+                    console.error('Failed to create inbox item:', error);
+                    showErrorToast(t('inbox.addError'));
+                    return false;
+                }
+            },
+            [
+                createMissingTags,
+                createMissingProjects,
+                showSuccessToast,
+                showErrorToast,
+                t,
+                clearComposerText,
+            ]
+        );
+
+        const handleVoiceTranscribed = useCallback(
+            async (transcript: string, transcriptMode: VoiceTranscriptMode) => {
+                if (transcriptMode === 'submit') {
+                    return saveInboxText(transcript, false);
+                }
+
+                setInputText((current) =>
+                    current.trim()
+                        ? `${current.trimEnd()} ${transcript}`
+                        : transcript
+                );
+                setAnalysisResult(null);
+                requestAnimationFrame(() => inputRef.current?.focus());
+                return true;
+            },
+            [saveInboxText]
+        );
+
         const handleSubmit = useCallback(
             async (forceInbox = false) => {
                 const trimmedText = inputText.trim();
-                if ((!trimmedText && !isEditMode) || isSaving) return;
+                if ((!trimmedText && !isEditMode) || isSaving || isVoiceBusy)
+                    return;
 
                 setIsSaving(true);
 
@@ -1210,34 +1264,7 @@ const QuickCaptureInput = React.forwardRef<
                         }
                     }
 
-                    try {
-                        await createMissingTags(trimmedText);
-                        await createMissingProjects(trimmedText);
-                        await createInboxItemWithStore(trimmedText);
-                        showSuccessToast(t('inbox.itemAdded'));
-                        setInputText('');
-                        setAnalysisResult(null);
-                        if (inputRef.current) {
-                            inputRef.current.focus();
-                        }
-                    } catch (error) {
-                        if (error instanceof OfflineQueuedError) {
-                            showSuccessToast(
-                                t(
-                                    'inbox.itemQueuedOffline',
-                                    "Saved offline. It'll sync automatically once you're back online."
-                                )
-                            );
-                            setInputText('');
-                            setAnalysisResult(null);
-                            if (inputRef.current) {
-                                inputRef.current.focus();
-                            }
-                            return;
-                        }
-                        console.error('Failed to create inbox item:', error);
-                        showErrorToast(t('inbox.addError'));
-                    }
+                    await saveInboxText(trimmedText, true);
                 } catch (error) {
                     if (error instanceof OfflineQueuedError) {
                         showSuccessToast(
@@ -1262,6 +1289,7 @@ const QuickCaptureInput = React.forwardRef<
             [
                 inputText,
                 isSaving,
+                isVoiceBusy,
                 onTaskCreate,
                 onNoteCreate,
                 showSuccessToast,
@@ -1276,6 +1304,7 @@ const QuickCaptureInput = React.forwardRef<
                 projects,
                 onSubmitOverride,
                 onAfterSubmit,
+                saveInboxText,
             ]
         );
 
@@ -2124,14 +2153,23 @@ const QuickCaptureInput = React.forwardRef<
                                 ) : null;
                             })()}
                         </div>
+                        {!isEditMode && (
+                            <VoiceCaptureButton
+                                disabled={isSaving}
+                                onBusyChange={setIsVoiceBusy}
+                                onTranscribed={handleVoiceTranscribed}
+                            />
+                        )}
                         {shouldShowPrimaryButton && (
                             <button
                                 type="button"
                                 onClick={() => handleSubmit(false)}
-                                disabled={isSaving}
+                                disabled={isSaving || isVoiceBusy}
                                 title={t('inbox.addToInbox')}
                                 className={`flex-shrink-0 self-start mt-3 text-[13px] font-medium px-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none transition-opacity ${
-                                    inputText.trim() && !isSaving
+                                    inputText.trim() &&
+                                    !isSaving &&
+                                    !isVoiceBusy
                                         ? 'opacity-100'
                                         : 'opacity-0 pointer-events-none'
                                 }`}

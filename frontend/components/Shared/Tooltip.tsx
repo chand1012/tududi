@@ -5,6 +5,8 @@ interface TooltipProps {
     children: React.ReactNode;
     className?: string;
     position?: 'top' | 'bottom';
+    align?: 'left' | 'center' | 'right';
+    tooltipClassName?: string;
 }
 
 const Tooltip: React.FC<TooltipProps> = ({
@@ -12,6 +14,8 @@ const Tooltip: React.FC<TooltipProps> = ({
     children,
     className = '',
     position = 'top',
+    align = 'center',
+    tooltipClassName = '',
 }) => {
     const [isVisible, setIsVisible] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,6 +33,11 @@ const Tooltip: React.FC<TooltipProps> = ({
     const visibilityClasses = isVisible
         ? 'opacity-100 scale-100'
         : 'pointer-events-none opacity-0 scale-95';
+    const alignmentClasses = {
+        left: 'left-0',
+        center: 'left-1/2 -translate-x-1/2',
+        right: 'right-0',
+    }[align];
 
     const showWithDelay = () => {
         timerRef.current = setTimeout(() => {
@@ -64,7 +73,7 @@ const Tooltip: React.FC<TooltipProps> = ({
             {children}
             <span
                 role="tooltip"
-                className={`absolute left-1/2 z-20 -translate-x-1/2 whitespace-pre-line rounded-md bg-gray-900 px-3 py-2 text-xs font-medium text-white shadow-2xl transition-all duration-150 ease-out dark:bg-gray-800 ${positionClasses} ${visibilityClasses}`}
+                className={`absolute z-20 whitespace-pre-line rounded-md bg-gray-900 px-3 py-2 text-xs font-medium text-white shadow-2xl transition-all duration-150 ease-out dark:bg-gray-800 ${positionClasses} ${alignmentClasses} ${visibilityClasses} ${tooltipClassName}`}
             >
                 {content}
             </span>

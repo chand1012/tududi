@@ -1,7 +1,12 @@
 'use strict';
 
 const inboxService = require('./service');
-const { UnauthorizedError } = require('../../shared/errors');
+const transcriptionService = require('../../services/transcriptionService');
+const {
+    AppError,
+    UnauthorizedError,
+    ValidationError,
+} = require('../../shared/errors');
 const { getAuthenticatedUserId } = require('../../utils/request-utils');
 
 function requireUserId(req) {
@@ -43,6 +48,48 @@ const inboxController = {
             res.status(201).json(item);
         } catch (error) {
             next(error);
+        }
+    },
+
+    async transcribe(req, res, next) {
+        try {
+            requireUserId(req);
+            if (!req.file?.buffer?.length) {
+                throw new ValidationError('A voice recording is required.');
+            }
+
+            const transcript = await transcriptionService.transcribeAudio(
+                req.file.buffer,
+                {
+                    mimeType: req.file.mimetype,
+                    filename: req.file.originalname,
+                }
+            );
+            res.json({ transcript });
+        } catch (error) {
+            if (error instanceof AppError) {
+                next(error);
+                return;
+            }
+
+            if (error?.code === 'TRANSCRIPTION_NOT_CONFIGURED') {
+                next(
+                    new AppError(
+                        'Voice transcription is not configured on this server.',
+                        503,
+                        'TRANSCRIPTION_NOT_CONFIGURED'
+                    )
+                );
+                return;
+            }
+
+            next(
+                new AppError(
+                    'We could not transcribe that recording. Please try again.',
+                    502,
+                    'TRANSCRIPTION_FAILED'
+                )
+            );
         }
     },
 

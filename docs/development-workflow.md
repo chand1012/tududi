@@ -138,6 +138,12 @@ LLM_MAX_TOKENS_TASK_INSIGHTS=1000    # raise if a reasoning model exhausts
 LLM_MAX_TOKENS_PROJECT_INSIGHTS=600  # its budget before answering
 LLM_DISABLE_THINKING=false    # true to send chat_template_kwargs.enable_thinking=false
 
+# Optional Telegram and Inbox voice transcription. API key and URL fall back
+# to LLM_API_KEY/OPENAI_API_KEY and LLM_BASE_URL/OPENAI_BASE_URL when omitted.
+TRANSCRIPTION_API_KEY=placeholder
+TRANSCRIPTION_BASE_URL=http://localhost:9292/v1
+TRANSCRIPTION_MODEL=whisper-1
+
 # Optional - Integrations
 DISABLE_TELEGRAM=false
 GOOGLE_CLIENT_ID=your-google-oauth-client-id

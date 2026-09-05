@@ -1,5 +1,6 @@
 const https = require('https');
 const { User, InboxItem } = require('../../models');
+const transcriptionService = require('../../services/transcriptionService');
 
 // Create poller state
 const createPollerState = () => ({
@@ -167,6 +168,36 @@ const makeHttpGetRequest = (url, timeout = 5000) => {
     });
 };
 
+// Side effect function to download a binary file
+const makeHttpGetBufferRequest = (url, timeout = 30000) => {
+    return new Promise((resolve, reject) => {
+        https
+            .get(url, { timeout }, (res) => {
+                const chunks = [];
+
+                res.on('data', (chunk) => {
+                    chunks.push(
+                        Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+                    );
+                });
+
+                res.on('end', () => {
+                    if (res.statusCode && res.statusCode >= 400) {
+                        reject(
+                            new Error(
+                                `Telegram file download failed with status ${res.statusCode}`
+                            )
+                        );
+                        return;
+                    }
+                    resolve(Buffer.concat(chunks));
+                });
+            })
+            .on('error', reject)
+            .on('timeout', () => reject(new Error('Request timeout')));
+    });
+};
+
 // Side effect function to make HTTP POST request
 const makeHttpPostRequest = (url, postData, options) => {
     return new Promise((resolve, reject) => {
@@ -240,6 +271,28 @@ const sendTelegramMessage = async (
     } catch (error) {
         throw error;
     }
+};
+
+const transcribeTelegramVoice = async (token, voice) => {
+    if (!voice?.file_id) {
+        throw new Error('Telegram voice message is missing a file ID.');
+    }
+
+    const fileResponse = await makeHttpGetRequest(
+        createTelegramUrl(token, 'getFile', { file_id: voice.file_id })
+    );
+    const filePath = fileResponse?.ok && fileResponse.result?.file_path;
+    if (!filePath) {
+        throw new Error('Telegram did not return a downloadable voice file.');
+    }
+
+    const audioBuffer = await makeHttpGetBufferRequest(
+        `https://api.telegram.org/file/bot${token}/${filePath}`
+    );
+    return transcriptionService.transcribeAudio(audioBuffer, {
+        mimeType: voice.mime_type || 'audio/ogg',
+        filename: 'telegram-voice.ogg',
+    });
 };
 
 // Side effect function to update user chat ID
@@ -332,7 +385,7 @@ const handleBotCommand = async (command, user, chatId, messageId) => {
             await sendTelegramMessage(
                 botToken,
                 chatId,
-                `🎉 Welcome to tududi!\n\nYour personal task management bot is now connected and ready to help!\n\n📝 Simply send me any message and I'll add it to your tududi inbox as an item.\n\n✨ Commands:\n• /help - Show help information\n• /start - Show welcome message\n• Just type any text - Add it as an inbox item\n\nLet's get organized! 🚀`,
+                `🎉 Welcome to tududi!\n\nYour personal task management bot is now connected and ready to help!\n\n📝 Send me a text or voice message and I'll add it to your tududi inbox as an item.\n\n✨ Commands:\n• /help - Show help information\n• /start - Show welcome message\n• Send text or a voice note - Add it as an inbox item\n\nLet's get organized! 🚀`,
                 messageId
             );
             break;
@@ -340,7 +393,7 @@ const handleBotCommand = async (command, user, chatId, messageId) => {
             await sendTelegramMessage(
                 botToken,
                 chatId,
-                `📋 tududi Bot Help\n\nSend me any text message and I'll add it to your tududi inbox as an inbox item.\n\nCommands:\n/start - Welcome message\n/help - Show this help message\n\nJust type your item and I'll take care of the rest!`,
+                `📋 tududi Bot Help\n\nSend me a text or voice message and I'll add it to your tududi inbox.\n\nCommands:\n/start - Welcome message\n/help - Show this help message\n\nType or record your item and I'll take care of the rest!`,
                 messageId
             );
             break;
@@ -358,7 +411,8 @@ const handleBotCommand = async (command, user, chatId, messageId) => {
 // Function to process a single message (contains side effects)
 const processMessage = async (user, update) => {
     const message = update.message;
-    const text = message.text;
+    const text = typeof message.text === 'string' ? message.text : null;
+    const voice = message.voice;
     const chatId = message.chat.id.toString();
     const messageId = message.message_id;
 
@@ -402,7 +456,7 @@ const processMessage = async (user, update) => {
         await sendTelegramMessage(
             user.telegram_bot_token,
             chatId,
-            `🎉 Welcome to tududi!\n\nYour personal task management bot is now connected and ready to help!\n\n📝 Simply send me any message and I'll add it to your tududi inbox as an inbox item.\n\n✨ Commands:\n• /help - Show help information\n• /start - Show welcome message\n• Just type any text - Add it as an inbox item\n\nLet's get organized! 🚀`
+            `🎉 Welcome to tududi!\n\nYour personal task management bot is now connected and ready to help!\n\n📝 Send me a text or voice message and I'll add it to your tududi inbox as an item.\n\n✨ Commands:\n• /help - Show help information\n• /start - Show welcome message\n• Send text or a voice note - Add it as an inbox item\n\nLet's get organized! 🚀`
         );
 
         console.log(
@@ -410,14 +464,14 @@ const processMessage = async (user, update) => {
         );
 
         // If the first message was just /start, don't process it further
-        if (text.toLowerCase() === '/start') {
+        if (text?.toLowerCase() === '/start') {
             return;
         }
     }
 
     try {
         // Check if message is a bot command
-        if (text.startsWith('/')) {
+        if (text?.startsWith('/')) {
             await handleBotCommand(text, user, chatId, messageId);
             console.log(
                 `Successfully processed command ${messageId} for user ${user.id}: "${text}"`
@@ -425,26 +479,38 @@ const processMessage = async (user, update) => {
             return;
         }
 
-        // Create inbox item for regular messages (with duplicate check)
-        await createInboxItem(text, user.id, messageId);
+        const content =
+            text !== null
+                ? text
+                : await transcribeTelegramVoice(user.telegram_bot_token, voice);
+
+        // Create inbox item for regular and transcribed messages (with duplicate check)
+        await createInboxItem(content, user.id, messageId);
 
         // Send confirmation
         await sendTelegramMessage(
             user.telegram_bot_token,
             chatId,
-            `✅ Added to tududi inbox: "${text}"`,
+            `✅ Added to tududi inbox: "${content}"`,
             messageId
         );
 
         console.log(
-            `Successfully processed message ${messageId} for user ${user.id}: "${text}"`
+            `Successfully processed message ${messageId} for user ${user.id}: "${content}"`
         );
     } catch (error) {
-        // Send error message
+        console.error(
+            `Failed to process Telegram message ${messageId} for user ${user.id}:`,
+            error.message || error
+        );
+
+        // Send a stable error message without exposing provider details
         await sendTelegramMessage(
             user.telegram_bot_token,
             chatId,
-            `❌ Failed to add to inbox: ${error.message}`,
+            voice
+                ? '❌ Failed to transcribe this voice message. Please try again.'
+                : `❌ Failed to add to inbox: ${error.message}`,
             messageId
         );
     }
@@ -478,7 +544,11 @@ const processUpdates = async (user, updates) => {
         try {
             const updateKey = getProcessedUpdateKey(user, update.update_id);
 
-            if (update.message && update.message.text) {
+            if (
+                update.message &&
+                (typeof update.message.text === 'string' ||
+                    update.message.voice)
+            ) {
                 // Mark update as processed BEFORE processing to avoid races
                 pollerState.processedUpdates.add(updateKey);
                 await processMessage(user, update);
@@ -683,4 +753,6 @@ module.exports = {
     _createTelegramUrl: createTelegramUrl,
     _isAuthorizedTelegramUser: isAuthorizedTelegramUser,
     _processMessage: processMessage,
+    _processUpdates: processUpdates,
+    _transcribeTelegramVoice: transcribeTelegramVoice,
 };

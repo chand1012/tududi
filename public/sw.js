@@ -5,7 +5,10 @@ const SYNC_QUEUE = 'tududi-sync-queue';
 // Non-GET endpoints with nothing worth replaying later (stateless reads
 // that happen to use a POST body). Queuing these would waste storage and
 // hand callers a stale/synthetic result instead of a real one.
-const NO_QUEUE_PATHS = ['/api/inbox/analyze-text'];
+const NO_QUEUE_PATHS = [
+    '/api/inbox/analyze-text',
+    '/api/inbox/transcribe',
+];
 
 // Set via SESSION_UPDATE message from the client after login.
 // Used to tag queued mutations and detect cross-principal replays.

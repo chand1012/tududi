@@ -215,6 +215,20 @@ The client is initialized in `service.js:getOpenAIClient()`. Any provider that s
 
 All three LLM calls request `response_format: { type: 'json_object' }` for structured output. If your backend does not support this parameter, the response parser will still attempt to extract JSON from raw text (including code-fenced output).
 
+### Voice transcription
+
+Telegram voice notes and recordings from the Inbox microphone can be transcribed by the same OpenAI-compatible provider or by a dedicated transcription server. Audio stays in memory, is sent to the provider's `/audio/transcriptions` endpoint, and is never retained by Tududi. Telegram creates the inbox item directly; the web app places the transcript in the composer so it can be reviewed before saving.
+
+| Setting | Primary variable | Fallback | Default |
+|---------|------------------|----------|---------|
+| API key | `TRANSCRIPTION_API_KEY` | `LLM_API_KEY`, then `OPENAI_API_KEY` | (required; a placeholder is acceptable if the server ignores authentication) |
+| Base URL | `TRANSCRIPTION_BASE_URL` | `LLM_BASE_URL`, then `OPENAI_BASE_URL` | OpenAI |
+| Model | `TRANSCRIPTION_MODEL` | — | `whisper-1` |
+
+The key and URL resolve independently, so either or both can be inherited from the LLM configuration. Only Telegram-native voice notes are supported in Telegram; generic audio and document attachments are ignored.
+
+Browser microphone access requires a secure context. Use HTTPS for a remote or LAN deployment; plain HTTP works only on `localhost` in supported browsers.
+
 ---
 
 ## User Profile Context

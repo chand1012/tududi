@@ -69,6 +69,29 @@ export const createInboxItem = async (
     return await response.json();
 };
 
+export const transcribeInboxAudio = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('audio', file);
+
+    const response = await fetch(getApiPath('inbox/transcribe'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            Accept: 'application/json',
+            'x-csrf-token': await getCsrfToken(),
+        },
+        body: formData,
+    });
+
+    await handleAuthResponse(response, 'Failed to transcribe voice recording.');
+    const result = await response.json();
+    const transcript = result?.transcript?.trim();
+    if (!transcript) {
+        throw new Error('The transcription was empty.');
+    }
+    return transcript;
+};
+
 export const updateInboxItem = async (
     itemUid: string,
     content: string
